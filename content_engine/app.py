@@ -121,6 +121,18 @@ with st.sidebar:
         "review all output before publishing."
     )
 
+    # Fairness notice
+    # WHY include this: AI models can produce subtly different quality output
+    # depending on how an audience is described. Users should be aware that
+    # copy should be reviewed for unintended bias before targeting any group.
+    st.divider()
+    st.markdown("### ⚖️ Fairness")
+    st.caption(
+        "Output quality should be consistent regardless of the audience profile entered. "
+        "If you notice the generated copy uses stereotypes or differs in quality "
+        "for different demographic groups, do not publish — regenerate or edit manually."
+    )
+
 # ---------------------------------------------------------------------------
 # Main area — two-column output layout
 # ---------------------------------------------------------------------------

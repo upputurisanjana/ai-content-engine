@@ -105,8 +105,13 @@ def generate_promo_video(image_bytes: bytes) -> bytes:
             job = resp.json()
             polling_url = job["polling_url"]
 
-            # Poll until the job completes or fails.
-            while True:
+            # Poll until the job completes, fails, or times out.
+            # WHY 20 polls × 15s = 5 minutes max:
+            #   Wan 2.6 jobs typically finish in 60–90s (4–6 polls).
+            #   20 polls gives a generous 5-minute ceiling before we give up,
+            #   preventing the UI from hanging indefinitely on a stuck job.
+            MAX_POLLS = 20
+            for poll_num in range(MAX_POLLS):
                 time.sleep(15)
                 poll = httpx.get(polling_url, headers=headers, timeout=30).json()
 
@@ -130,6 +135,18 @@ def generate_promo_video(image_bytes: bytes) -> bytes:
                     #   (bad input, model error). Retrying the same payload will
                     #   fail again — better to surface the error immediately.
                     raise RuntimeError(f"Video job failed: {poll.get('error')}")
+
+                logger.info(
+                    "video_poll poll=%d/%d status=%s",
+                    poll_num + 1,
+                    MAX_POLLS,
+                    poll.get("status"),
+                )
+
+            raise RuntimeError(
+                f"Video generation timed out after {MAX_POLLS * 15}s "
+                "(job still pending). Try again or reduce video duration."
+            )
 
         except RuntimeError:
             raise  # Don't retry server-side job failures — they won't recover

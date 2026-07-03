@@ -127,6 +127,9 @@ def _clean(text: str) -> str:
 TAGLINE_SYSTEM = """
 You are a creative director. Generate ONE campaign tagline.
 Match the brand tone exactly. Max 10 words. No hashtags.
+This tool is for marketing content only. If the product or request involves
+medical advice, legal counsel, financial guidance, or political messaging,
+respond with exactly: REFUSED: outside scope.
 """
 
 # WHY few-shot examples keyed by tone:
@@ -193,7 +196,12 @@ def generate_tagline(product: str, audience: str, tone: str) -> str:
                 max_tokens=200,
             )
             _log_call("generate_tagline", TEXT_MODEL, start, resp)
-            return _clean(resp.choices[0].message.content).strip('"')
+            result = _clean(resp.choices[0].message.content).strip('"')
+            # Surface content safety refusals as a clear error rather than
+            # silently returning "REFUSED: outside scope" as a tagline.
+            if result.startswith("REFUSED:"):
+                raise ValueError(f"Content safety refusal: {result}")
+            return result
         except Exception as e:
             logger.warning("generate_tagline attempt %d failed: %s", attempt + 1, e)
             if attempt == 1:
@@ -246,7 +254,10 @@ def generate_blog_intro(product: str, audience: str, tone: str, tagline: str) ->
                 max_tokens=500,
             )
             _log_call("generate_blog_intro", TEXT_MODEL, start, resp)
-            return _clean(resp.choices[0].message.content)
+            result = _clean(resp.choices[0].message.content)
+            if result.startswith("REFUSED:"):
+                raise ValueError(f"Content safety refusal: {result}")
+            return result
         except Exception as e:
             logger.warning("generate_blog_intro attempt %d failed: %s", attempt + 1, e)
             if attempt == 1:
@@ -270,7 +281,10 @@ Return ONLY valid JSON (no markdown fences, no preamble):
   "linkedin":  "<string, max 700 chars>"
 }}
 Tone: {tone}.
-Each platform's copy must differ in length, style, and call-to-action — not just truncated versions of each other.
+Each platform's copy must differ in length, style, and call-to-action -- not just truncated versions of each other.
+This tool is for marketing content only. If the product involves medical advice,
+legal counsel, financial guidance, or political messaging, respond with exactly:
+REFUSED: outside scope.
 """
 
 # WHY hard character limits enforced in code (not only in the prompt):
@@ -310,6 +324,10 @@ def generate_social_posts(product: str, tone: str) -> dict:
             _log_call("generate_social_posts", TEXT_MODEL, start, resp)
 
             raw = _clean(resp.choices[0].message.content)
+
+            # Check for content safety refusal before attempting JSON parse.
+            if raw.strip().startswith("REFUSED:"):
+                raise ValueError(f"Content safety refusal: {raw.strip()}")
 
             # Strip markdown fences — some models add ```json ... ``` despite instructions.
             # WHY strip here rather than failing: recoverable formatting error; the
